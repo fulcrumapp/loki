@@ -184,57 +184,19 @@ func parseS3Log(ctx context.Context, b *batch, labels map[string]string, obj io.
 
 	ls = applyLabels(ls)
 
-	// S3 Server Access Log is not gzipped, so we should handle it differently
+	var scanner *bufio.Scanner
+	var gzreader *gzip.Reader
+	var gzerr error
 	if labels["type"] == S3_SERVER_ACCESS_LOG_TYPE {
-		fmt.Println("S3 Server Access Log")
-		fmt.Printf("%v", obj)
-		fmt.Println("")
-		data, derr := io.ReadAll(obj)
-		if derr != nil {
-			fmt.Println("Error reading the data")
-			return nil
-		}
-		fmt.Println(string(data))
-		var err error
-		timestamp := time.Now()
-		match := parser.timestampRegex.FindStringSubmatch(string(data))
-		if len(match) > 0 {
-			fmt.Println("Matched on the timestamp... YEA")
-			switch parser.timestampType {
-			case "string":
-				timestamp, err = time.Parse(parser.timestampFormat, match[1])
-				if err != nil {
-					return err
-				}
-			default:
-				level.Warn(*log).Log("msg", fmt.Sprintf("timestamp type of %s parser unknown, using current time", labels["type"]))
-			}
+		scanner = bufio.NewScanner(obj)
+	} else {
+		gzreader, gzerr = gzip.NewReader(obj)
+		if gzerr != nil {
+			return gzerr
 		}
 
-		if err := b.add(ctx, entry{ls, logproto.Entry{
-			Line:      string(data),
-			Timestamp: timestamp,
-		}}); err != nil {
-			return err
-		}
-
-		return nil
+		scanner = bufio.NewScanner(gzreader)
 	}
-
-	fmt.Println("-------------")
-	fmt.Println("-------------")
-	fmt.Println("Should NOT be getting here")
-	fmt.Println("-------------")
-	fmt.Println("-------------")
-
-	gzreader, err := gzip.NewReader(obj)
-	if err != nil {
-		fmt.Println("Error is here creating the new READER")
-		return err
-	}
-
-	scanner := bufio.NewScanner(gzreader)
-
 	// extract the timestamp of the nested event and sends the rest as raw json
 	if labels["type"] == CLOUDTRAIL_LOG_TYPE || labels["type"] == GUARDDUTY_LOG_TYPE {
 		records := make(chan Record)
@@ -268,6 +230,7 @@ func parseS3Log(ctx context.Context, b *batch, labels map[string]string, obj io.
 		}
 
 		timestamp := time.Now()
+		var tserr error
 		match := parser.timestampRegex.FindStringSubmatch(logLine)
 		if len(match) > 0 {
 			if labels["lb_type"] == LB_NLB_TYPE {
@@ -277,14 +240,14 @@ func parseS3Log(ctx context.Context, b *batch, labels map[string]string, obj io.
 
 			switch parser.timestampType {
 			case "string":
-				timestamp, err = time.Parse(parser.timestampFormat, match[1])
-				if err != nil {
-					return err
+				timestamp, tserr = time.Parse(parser.timestampFormat, match[1])
+				if tserr != nil {
+					return tserr
 				}
 			case "unix":
-				sec, nsec, err := getUnixSecNsec(match[1])
-				if err != nil {
-					return err
+				sec, nsec, tserr := getUnixSecNsec(match[1])
+				if tserr != nil {
+					return tserr
 				}
 				timestamp = time.Unix(sec, nsec).UTC()
 			default:
@@ -340,31 +303,7 @@ func processS3Event(ctx context.Context, ev *events.S3Event, pc Client, log *log
 		return err
 	}
 	for _, record := range ev.Records {
-		// fmt.Println("Starting the loop")
-		// fmt.Println(record)
-		// fmt.Println("EventName")
-		// fmt.Println(record.EventName)
-		// fmt.Println("EventSource")
-		// fmt.Println(record.EventSource)
-		// fmt.Println("PrincipalID")
-		// fmt.Println(record.PrincipalID)
-		// fmt.Println("S3")
-		// fmt.Println(record.S3)
-		// fmt.Println("S3 Configuration ID")
-		// fmt.Println(record.S3.ConfigurationID)
-		// fmt.Println("S3 Configuration Bucket")
-		// fmt.Println(record.S3.Bucket)
-		// fmt.Println("S3 Configuration Bucket Name")
-		// fmt.Println(record.S3.Bucket.Name)
-		// fmt.Println("S3 Object")
-		// fmt.Println(record.S3.Object)
 		labels, err := getLabels(record)
-		// fmt.Println("Getting here after labels")
-		// fmt.Println(labels)
-		// fmt.Println("-----------------")
-		// fmt.Println(err)
-		// fmt.Println("-----------------")
-		// fmt.Println("-----------------")
 		if err != nil {
 			return err
 		}

@@ -263,12 +263,6 @@ func handler(ctx context.Context, ev map[string]interface{}) error {
 		return err
 	}
 
-	// fmt.Println("HERE")
-	// fmt.Println(event)
-	// fmt.Println("-----------------")
-	// fmt.Println(err)
-	// fmt.Println("-----------------")
-	// fmt.Println("-----------------")
 	switch evt := event.(type) {
 	case *events.CloudWatchEvent:
 		err = processEventBridgeEvent(ctx, evt, pClient, pClient.log, processS3Event)
