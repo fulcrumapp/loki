@@ -82,6 +82,10 @@ var (
 	// source: https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_exportfindings.html
 	// format: my-bucket/AWSLogs/aws-account-id/GuardDuty/region/year/month/day/random-string.jsonl.gz
 	// example: my-bucket/AWSLogs/123456789012/GuardDuty/us-east-1/2024/05/30/07a3f2ce-1485-3031-b842-e1f324c4a48d.jsonl.gz
+	// S3 Server Access Logs
+	// source: https://docs.aws.amazon.com/AmazonS3/latest/userguide/ServerAccessLogs.html
+	// format: optional-prefix/AWSLogs/aws-account-id/region/bucket/year/month/day/year-month-day-random-string
+	// example: bucket-and-optional-prefix/AWSLogs/11111111111/us-east-1/some-example-bucket/2025/01/01/2025-01-01-01-00-00-123456789
 	defaultFilenameRegex         = regexp.MustCompile(`AWSLogs\/(?P<account_id>\d+)\/(?P<type>[a-zA-Z0-9_\-]+)\/(?P<region>[\w-]+)\/(?P<year>\d+)\/(?P<month>\d+)\/(?P<day>\d+)\/\d+\_(?:elasticloadbalancing|vpcflowlogs)_(?:\w+-\w+-(?:\w+-)?\d)_(?:(?P<lb_type>app|net)\.*?)?(?P<src>[a-zA-Z0-9\-]+)`)
 	defaultTimestampRegex        = regexp.MustCompile(`(?P<timestamp>\d+-\d+-\d+T\d+:\d+:\d+(?:\.\d+Z)?)`)
 	cloudtrailFilenameRegex      = regexp.MustCompile(`AWSLogs\/(?P<organization_id>o-[a-z0-9]{10,32})?\/?(?P<account_id>\d+)\/(?P<type>[a-zA-Z0-9_\-]+)\/(?P<region>[\w-]+)\/(?P<year>\d+)\/(?P<month>\d+)\/(?P<day>\d+)\/\d+\_(?:CloudTrail|CloudTrail-Digest)_(?:\w+-\w+-(?:\w+-)?\d)_(?:(?:app|nlb|net)\.*?)?.+_(?P<src>[a-zA-Z0-9\-]+)`)
@@ -295,11 +299,8 @@ func getLabels(record events.S3EventRecord) (map[string]string, error) {
 }
 
 func processS3Event(ctx context.Context, ev *events.S3Event, pc Client, log *log.Logger) error {
-	fmt.Println("Processing S3 event")
-	fmt.Println("Beginning of function")
 	batch, err := newBatch(ctx, pc)
 	if err != nil {
-		fmt.Println("Error settup up batch")
 		return err
 	}
 	for _, record := range ev.Records {
@@ -321,9 +322,7 @@ func processS3Event(ctx context.Context, ev *events.S3Event, pc Client, log *log
 			return fmt.Errorf("failed to get object %s from bucket %s, %s", labels["key"], labels["bucket"], err)
 		}
 		err = parseS3Log(ctx, batch, labels, obj.Body, log)
-		fmt.Println("FINISHED parsing")
 		if err != nil {
-			fmt.Println("Error while parsing")
 			return err
 		}
 	}
