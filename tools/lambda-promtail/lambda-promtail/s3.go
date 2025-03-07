@@ -30,6 +30,8 @@ type parserConfig struct {
 	logTypeLabel string
 	// regex matching filename and and exporting labels from it
 	filenameRegex *regexp.Regexp
+	// type of the file: plaintext or gzip
+	filetype string
 	// regex that extracts the timestamp from the log sample
 	timestampRegex *regexp.Regexp
 	// time format to use to convert the timestamp to time.Time
@@ -104,6 +106,7 @@ var (
 			timestampRegex:  defaultTimestampRegex,
 			timestampFormat: time.RFC3339,
 			timestampType:   "string",
+			filetype:        "gzip",
 			skipHeaderCount: 1,
 		},
 		LB_LOG_TYPE: {
@@ -113,16 +116,19 @@ var (
 			timestampFormat: time.RFC3339,
 			timestampRegex:  defaultTimestampRegex,
 			timestampType:   "string",
+			filetype:        "gzip",
 		},
 		CLOUDTRAIL_LOG_TYPE: {
 			logTypeLabel:    "s3_cloudtrail",
 			ownerLabelKey:   "account_id",
 			skipHeaderCount: 3,
 			filenameRegex:   cloudtrailFilenameRegex,
+			filetype:        "gzip",
 		},
 		CLOUDFRONT_LOG_TYPE: {
 			logTypeLabel:    "s3_cloudfront",
 			filenameRegex:   cloudfrontFilenameRegex,
+			filetype:        "gzip",
 			ownerLabelKey:   "prefix",
 			timestampRegex:  cloudfrontTimestampRegex,
 			timestampFormat: "2006-01-02\x0915:04:05",
@@ -132,6 +138,7 @@ var (
 		WAF_LOG_TYPE: {
 			logTypeLabel:   "s3_waf",
 			filenameRegex:  wafFilenameRegex,
+			filetype:       "gzip",
 			ownerLabelKey:  "account_id",
 			timestampRegex: wafTimestampRegex,
 			timestampType:  "unix",
@@ -139,6 +146,7 @@ var (
 		GUARDDUTY_LOG_TYPE: {
 			logTypeLabel:    "s3_guardduty",
 			filenameRegex:   guarddutyFilenameRegex,
+			filetype:        "gzip",
 			ownerLabelKey:   "account_id",
 			timestampFormat: time.RFC3339,
 			timestampRegex:  defaultTimestampRegex,
@@ -147,6 +155,7 @@ var (
 		S3_SERVER_ACCESS_LOG_TYPE: {
 			logTypeLabel:    "s3_server_access",
 			filenameRegex:   s3ServerAccessFilenameRegex,
+			filetype:        "plaintext",
 			ownerLabelKey:   "account_id",
 			timestampFormat: "[02/Jan/2006:15:04:05 -0700]",
 			timestampRegex:  s3ServerAccessTimestampRegex,
@@ -191,15 +200,18 @@ func parseS3Log(ctx context.Context, b *batch, labels map[string]string, obj io.
 	var scanner *bufio.Scanner
 	var gzreader *gzip.Reader
 	var gzerr error
-	if labels["type"] == S3_SERVER_ACCESS_LOG_TYPE {
+
+	switch parser.filetype {
+	case "plaintext":
 		scanner = bufio.NewScanner(obj)
-	} else {
+	case "gzip":
 		gzreader, gzerr = gzip.NewReader(obj)
 		if gzerr != nil {
 			return gzerr
 		}
-
-		scanner = bufio.NewScanner(gzreader)
+	default:
+		level.Warn(*log).Log("msg", fmt.Sprintf("filetype of %s parser unknown, using plaintext", parser.filetype))
+		scanner = bufio.NewScanner(obj)
 	}
 	// extract the timestamp of the nested event and sends the rest as raw json
 	if labels["type"] == CLOUDTRAIL_LOG_TYPE || labels["type"] == GUARDDUTY_LOG_TYPE {
@@ -258,7 +270,6 @@ func parseS3Log(ctx context.Context, b *batch, labels map[string]string, obj io.
 				level.Warn(*log).Log("msg", fmt.Sprintf("timestamp type of %s parser unknown, using current time", labels["type"]))
 			}
 		}
-
 		if err := b.add(ctx, entry{ls, logproto.Entry{
 			Line:      logLine,
 			Timestamp: timestamp,
