@@ -427,6 +427,39 @@ func Test_getLabels(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "s3_server_access",
+			args: args{
+				record: events.S3EventRecord{
+					AWSRegion: "us-east-1",
+					S3: events.S3Entity{
+						Bucket: events.S3Bucket{
+							Name: "s3_access_logs_test",
+							OwnerIdentity: events.S3UserIdentity{
+								PrincipalID: "test",
+							},
+						},
+						Object: events.S3Object{
+							Key: "prefix/AWSLogs/s3AccessLogs/11111111111/us-east-1/TEST-source-bucket/2021/10/28/source-bucket_TEST-s3AccessLog_e0ca43b5.txt",
+						},
+					},
+				},
+			},
+			want: map[string]string{
+				"account_id":    "11111111111",
+				"bucket_owner":  "test",
+				"bucket_region": "us-east-1",
+				"bucket":        "s3_access_logs_test",
+				"day":           "28",
+				"key":           "prefix/AWSLogs/s3AccessLogs/11111111111/us-east-1/TEST-source-bucket/2021/10/28/source-bucket_TEST-s3AccessLog_e0ca43b5.txt",
+				"month":         "10",
+				"region":        "us-east-1",
+				"src":           "source-bucket",
+				"type":          S3_SERVER_ACCESS_LOG_TYPE,
+				"year":          "2021",
+			},
+			wantErr: false,
+		},
+		{
 			name: "missing_type",
 			args: args{
 				record: events.S3EventRecord{
@@ -635,6 +668,24 @@ func Test_parseS3Log(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "s3accesslogs",
+			args: args{
+				batchSize: 131072, // Set large enough we don't try and send to promtail
+				filename:  "../testdata/s3accesslog.log",
+				b: &batch{
+					streams: map[string]*logproto.Stream{},
+				},
+				labels: map[string]string{
+					"account_id": "11111111111",
+					"src":        "some-file",
+					"type":       S3_SERVER_ACCESS_LOG_TYPE,
+				},
+			},
+			expectedLen:    1,
+			expectedStream: `{__aws_log_type="s3_server_access", __aws_s3_server_access="some-file", __aws_s3_server_access_owner="11111111111"}`,
+			wantErr:        false,
+		},
+		{
 			name: "missing_parser",
 			args: args{
 				batchSize: 131072, // Set large enough we don't try and send to promtail
@@ -679,6 +730,7 @@ func Test_parseS3Log(t *testing.T) {
 		filenameRegex:  wafFilenameRegex,
 		ownerLabelKey:  "account_id",
 		timestampRegex: wafTimestampRegex,
+		filetype:       "gzip",
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
