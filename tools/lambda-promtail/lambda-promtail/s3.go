@@ -87,7 +87,7 @@ var (
 	// S3 Server Access Logs
 	// source: https://docs.aws.amazon.com/AmazonS3/latest/userguide/ServerAccessLogs.html
 	// format: my-bucket/optional-prefix/AWSLogs/s3AccessLogs/aws-account-id/region/bucket/year/month/day/year-month-day-random-string
-	// example: bucket-and-optional-prefix/AWSLogs/11111111111/us-east-1/some-example-bucket/2025/01/01/2025-01-01-01-00-00-123456789
+	// example: bucket-and-optional-prefix/AWSLogs/s3AccessLogs/11111111111/us-east-1/some-example-bucket/2025/01/01/2025-01-01-01-00-00-123456789
 	defaultFilenameRegex         = regexp.MustCompile(`AWSLogs\/(?P<account_id>\d+)\/(?P<type>[a-zA-Z0-9_\-]+)\/(?P<region>[\w-]+)\/(?P<year>\d+)\/(?P<month>\d+)\/(?P<day>\d+)\/\d+\_(?:elasticloadbalancing|vpcflowlogs)_(?:\w+-\w+-(?:\w+-)?\d)_(?:(?P<lb_type>app|net)\.*?)?(?P<src>[a-zA-Z0-9\-]+)`)
 	defaultTimestampRegex        = regexp.MustCompile(`(?P<timestamp>\d+-\d+-\d+T\d+:\d+:\d+(?:\.\d+Z)?)`)
 	cloudtrailFilenameRegex      = regexp.MustCompile(`AWSLogs\/(?P<organization_id>o-[a-z0-9]{10,32})?\/?(?P<account_id>\d+)\/(?P<type>[a-zA-Z0-9_\-]+)\/(?P<region>[\w-]+)\/(?P<year>\d+)\/(?P<month>\d+)\/(?P<day>\d+)\/\d+\_(?:CloudTrail|CloudTrail-Digest)_(?:\w+-\w+-(?:\w+-)?\d)_(?:(?:app|nlb|net)\.*?)?.+_(?P<src>[a-zA-Z0-9\-]+)`)
@@ -133,7 +133,7 @@ var (
 			timestampRegex:  cloudfrontTimestampRegex,
 			timestampFormat: "2006-01-02\x0915:04:05",
 			timestampType:   "string",
-			skipHeaderCount: 2,
+			// skipHeaderCount: 2, # need to investigate more. this causes log entries to be dropped.
 		},
 		WAF_LOG_TYPE: {
 			logTypeLabel:   "s3_waf",
