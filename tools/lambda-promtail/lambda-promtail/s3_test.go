@@ -647,6 +647,28 @@ func Test_parseS3Log(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "cloudfrontlogs_json",
+			args: args{
+				batchSize: 131072, // Set large enough we don't try and send to promtail
+				filename:  "../testdata/cloudfront.json.gz",
+				b: &batch{
+					streams: map[string]*logproto.Stream{},
+				},
+				labels: map[string]string{
+					"type":   CLOUDFRONT_LOG_TYPE,
+					"src":    "DISTRIBUTIONID",
+					"prefix": "path/to/file",
+				},
+			},
+			expectedLen:    1,
+			expectedStream: `{__aws_log_type="s3_cloudfront", __aws_s3_cloudfront="DISTRIBUTIONID", __aws_s3_cloudfront_owner="path/to/file"}`,
+			expectedTimestamps: []time.Time{
+				time.Date(2023, time.April, 26, 7, 25, 11, 0, time.UTC),
+				time.Date(2023, time.April, 26, 7, 25, 11, 0, time.UTC),
+			},
+			wantErr: false,
+		},
+		{
 			name: "waflogs",
 			args: args{
 				batchSize: 131072, // Set large enough we don't try and send to promtail
