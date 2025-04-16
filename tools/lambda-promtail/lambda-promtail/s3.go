@@ -101,7 +101,9 @@ var (
 	wafFilenameRegex             = regexp.MustCompile(`AWSLogs\/(?P<account_id>\d+)\/(?P<type>WAFLogs)\/(?P<region>[\w-]+)\/(?P<src>[\w-]+)\/(?P<year>\d+)\/(?P<month>\d+)\/(?P<day>\d+)\/(?P<hour>\d+)\/(?P<minute>\d+)\/\d+\_waflogs\_[\w-]+_[\w-]+_\d+T\d+Z_\w+`)
 	wafTimestampRegex            = regexp.MustCompile(`"timestamp":\s*(?P<timestamp>\d+),`)
 	guarddutyFilenameRegex       = regexp.MustCompile(`AWSLogs\/(?P<account_id>\d+)\/(?P<type>GuardDuty)\/(?P<region>[\w-]+)\/(?P<year>\d+)\/(?P<month>\d+)\/(?P<day>\d+)\/.+`)
-	s3ServerAccessFilenameRegex  = regexp.MustCompile(`AWSLogs\/(?P<type>s3AccessLogs)\/(?P<account_id>\d+)\/(?P<region>[\w-]+)\/(?P<bucket>[a-zA-Z0-9\-]+)\/(?P<year>\d+)\/(?P<month>\d+)\/(?P<day>\d+)\/(?P<src>[a-zA-Z0-9\-]+)`)
+	// s3ServerAccessFilenameRegex  = regexp.MustCompile(`AWSLogs\/(?P<type>s3AccessLogs)\/(?P<account_id>\d+)\/(?P<region>[\w-]+)\/(?P<bucket>[a-zA-Z0-9\-]+)\/(?P<year>\d+)\/(?P<month>\d+)\/(?P<day>\d+)\/(?P<src>[a-zA-Z0-9\-]+)`)
+	s3ServerAccessFilenameRegex = regexp.MustCompile(`AWSLogs\/(?P<account_id>\d+)\/(?P<region>[\w-]+)\/(?P<bucket>[a-zA-Z0-9\-\.]+)\/(?P<year>\d+)\/(?P<month>\d+)\/(?P<day>\d+)\/(?P<src>[a-zA-Z0-9\-]+)`)
+	// AWSLogs/833023401363/us-east-1/fulcrum-prod-tiles-us-east-1-layers.fulcrumapp.com/2025/04/16/2025-04-16-17-14-52-ED7E7FA7AAE0A2CC
 	s3ServerAccessTimestampRegex = regexp.MustCompile(`(?P<timestamp>\[\d{2}/[A-Za-z]{3}/\d{4}:\d{2}:\d{2}:\d{2} \+\d{4}\])`)
 	parsers                      = map[string]parserConfig{
 		FLOW_LOG_TYPE: {
