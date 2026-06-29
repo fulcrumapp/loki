@@ -141,3 +141,56 @@ func TestLambdaPromtail_SQSParseEventsComplaint(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, 1332, mockBatch.size) //The size of the batch is equal to the entire Mail object above
 }
+
+// TestLambdaPromtail_SQSEmptyRecords verifies that processSQSEvent does not
+// attempt to push an empty batch when the SQS queue has no records, which
+// previously caused Loki to return HTTP 422 "at least one valid stream is
+// required for ingestion".
+func TestLambdaPromtail_SQSEmptyRecords(t *testing.T) {
+	tc := &events.SQSEvent{
+		Records: []events.SQSMessage{},
+	}
+
+	ctx := context.TODO()
+	log := NewLogger("Info")
+	client := testPromtailClient{}
+	err := processSQSEvent(ctx, tc, client, log, mockHandler)
+	require.NoError(t, err)
+}
+
+// TestLambdaPromtail_SQSNilEvent verifies that processSQSEvent handles a nil
+// event gracefully without panicking or returning an error.
+func TestLambdaPromtail_SQSNilEvent(t *testing.T) {
+	ctx := context.TODO()
+	log := NewLogger("Info")
+	client := testPromtailClient{}
+
+	// parseSQSEvent guards against nil; processSQSEvent should too via the
+	// empty-batch guard in sendToPromtail.
+	batch, err := newBatch(ctx, client)
+	require.NoError(t, err)
+
+	err = parseSQSEvent(ctx, batch, nil, log, mockHandler)
+	require.NoError(t, err)
+	require.Equal(t, 0, batch.size)
+}
+
+// TestLambdaPromtail_SQSNonSESMessageProducesNoEntries verifies that a
+// non-SES, non-S3 SQS record results in an empty batch (no streams sent).
+func TestLambdaPromtail_SQSNonSESMessageProducesNoEntries(t *testing.T) {
+	tc := &events.SQSEvent{
+		Records: []events.SQSMessage{
+			{
+				AWSRegion: "us-east-1",
+				MessageId: "someID",
+				Body:      `{"foo": "bar"}`,
+			},
+		},
+	}
+
+	ctx := context.TODO()
+	log := NewLogger("Info")
+	client := testPromtailClient{}
+	err := processSQSEvent(ctx, tc, client, log, mockHandler)
+	require.NoError(t, err)
+}

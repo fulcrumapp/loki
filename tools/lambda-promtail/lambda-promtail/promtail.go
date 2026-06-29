@@ -40,6 +40,7 @@ type batch struct {
 	streams map[string]*logproto.Stream
 	size    int
 	client  Client
+	source  string // Event source for traceability: s3, sqs, kinesis, etc.
 }
 
 func newBatch(ctx context.Context, pClient Client, entries ...entry) (*batch, error) {
@@ -61,6 +62,11 @@ func (b *batch) add(ctx context.Context, e entry) error {
 	// Skip entries with no labels (filtered out by relabeling)
 	if e.labels == nil {
 		return nil
+	}
+
+	// Add source label if batch has one
+	if b.source != "" && e.labels["source"] == "" {
+		e.labels["source"] = model.LabelValue(b.source)
 	}
 
 	labels := labelsMapToString(e.labels, reservedLabelTenantID)
@@ -140,7 +146,26 @@ func (b *batch) resetBatch() {
 	b.size = 0
 }
 
+func (b *batch) summary() string {
+	labels := make([]string, 0, len(b.streams))
+	for streamLabels := range b.streams {
+		labels = append(labels, streamLabels)
+	}
+	sort.Strings(labels)
+
+	summary := fmt.Sprintf("batch with %d streams:", len(labels))
+	for _, streamLabels := range labels {
+		summary += fmt.Sprintf(" [%s]", streamLabels)
+	}
+
+	return summary
+}
+
 func (c *promtailClient) sendToPromtail(ctx context.Context, b *batch) error {
+	if len(b.streams) == 0 {
+		return nil
+	}
+
 	buf, _, err := b.encode()
 	if err != nil {
 		return err
@@ -166,8 +191,10 @@ func (c *promtailClient) sendToPromtail(ctx context.Context, b *batch) error {
 	}
 
 	if err != nil {
-		level.Error(*c.log).Log("err", fmt.Errorf("failed to send logs! %s", err))
-		return err
+		batchInfo := b.summary()
+		wrappedErr := fmt.Errorf("%w; %s", err, batchInfo)
+		level.Error(*c.log).Log("err", fmt.Errorf("failed to send logs! %s", wrappedErr))
+		return wrappedErr
 	}
 
 	return nil

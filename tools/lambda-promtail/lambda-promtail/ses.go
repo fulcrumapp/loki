@@ -88,7 +88,7 @@ type Bounce struct {
 type Recipient struct {
 	EmailAddress   string `json:"emailAddress"`
 	Action         string `json:"action"`
-	Status         string `json="status"`
+	Status         string `json:"status"`
 	DiagnosticCode string `json:"diagnosticCode"`
 }
 
@@ -118,18 +118,18 @@ type Delivery struct {
 }
 
 func parseSESEvent(ctx context.Context, b *batch, log *log.Logger, ev *SESNotification) error {
+	ingestTimestamp := time.Now().UTC()
+
 	labels := model.LabelSet{
 		model.LabelName("__aws_log_type"): model.LabelValue("SQS - SES"),
 		model.LabelName("__aws_ses_type"): model.LabelValue(ev.NotificationType),
 		model.LabelName("service_name"):   model.LabelValue("AWS - SES"),
 	}
 
-	level.Debug(*log).Log("msg", fmt.Sprintf("Processing SES Event"))
+	level.Debug(*log).Log("msg", "Processing SES Event")
 	if ev.Bounce != nil {
 		// Message is of type Bounce
-		level.Debug(*log).Log("msg", fmt.Sprintf("Processing SES Event as type Bounce"))
-
-		timestamp, _ := time.Parse(time.RFC3339, ev.Bounce.Timestamp)
+		level.Debug(*log).Log("msg", "Processing SES Event as type Bounce")
 
 		beventLabels := model.LabelSet{
 			model.LabelName("bounce_type"):     model.LabelValue(ev.Bounce.BounceType),
@@ -141,6 +141,7 @@ func parseSESEvent(ctx context.Context, b *batch, log *log.Logger, ev *SESNotifi
 			msg = msg + "' with action: '" + recipent.Action
 			msg = msg + "' and status '" + recipent.Status
 			msg = msg + "' and diagnosticCode '" + recipent.DiagnosticCode
+			msg = msg + "' and ses_event_timestamp '" + ev.Bounce.Timestamp
 			msg = msg + "' " + fmt.Sprintf("%+v", ev.Mail)
 
 			recipentLabels := model.LabelSet{
@@ -150,7 +151,7 @@ func parseSESEvent(ctx context.Context, b *batch, log *log.Logger, ev *SESNotifi
 			recipentEventLabels := model.LabelSet.Merge(bventLabels, recipentLabels)
 			if batchErr := b.add(ctx, entry{recipentEventLabels, logproto.Entry{
 				Line:      msg,
-				Timestamp: timestamp,
+				Timestamp: ingestTimestamp,
 			}}); batchErr != nil {
 				return batchErr
 			}
@@ -158,8 +159,7 @@ func parseSESEvent(ctx context.Context, b *batch, log *log.Logger, ev *SESNotifi
 	}
 	if ev.Complaint != nil {
 		// Message is of type complaint
-		level.Debug(*log).Log("msg", fmt.Sprintf("Processing SES Event as type Complaint"))
-		timestamp, _ := time.Parse(time.RFC3339, ev.Complaint.Timestamp)
+		level.Debug(*log).Log("msg", "Processing SES Event as type Complaint")
 
 		ceventLabels := model.LabelSet{
 			model.LabelName("complaint_type"): model.LabelValue(ev.Complaint.Type),
@@ -167,7 +167,7 @@ func parseSESEvent(ctx context.Context, b *batch, log *log.Logger, ev *SESNotifi
 		cventLabels := model.LabelSet.Merge(labels, ceventLabels)
 		for _, recipent := range ev.Complaint.ComplainedRecipients {
 			msg := "Received a complaint from recipent: '" + recipent.EmailAddress
-			msg = msg + "' "
+			msg = msg + "' with ses_event_timestamp '" + ev.Complaint.Timestamp + "' "
 			msg = msg + fmt.Sprintf("%+v", ev.Mail)
 			recipentLabels := model.LabelSet{
 				model.LabelName("email_address"): model.LabelValue(recipent.EmailAddress),
@@ -175,7 +175,7 @@ func parseSESEvent(ctx context.Context, b *batch, log *log.Logger, ev *SESNotifi
 			recipentEventLabels := model.LabelSet.Merge(cventLabels, recipentLabels)
 			if batchErr := b.add(ctx, entry{recipentEventLabels, logproto.Entry{
 				Line:      msg,
-				Timestamp: timestamp,
+				Timestamp: ingestTimestamp,
 			}}); batchErr != nil {
 				return batchErr
 			}
@@ -183,12 +183,11 @@ func parseSESEvent(ctx context.Context, b *batch, log *log.Logger, ev *SESNotifi
 	}
 	if ev.Delivery != nil {
 		// Message is of type delivery
-		level.Debug(*log).Log("msg", fmt.Sprintf("Processing SES Event as type Delivery"))
-		timestamp, _ := time.Parse(time.RFC3339, ev.Delivery.Timestamp)
+		level.Debug(*log).Log("msg", "Processing SES Event as type Delivery")
 
 		if batchErr := b.add(ctx, entry{labels, logproto.Entry{
-			Line:      fmt.Sprintf("%+v", ev.Mail),
-			Timestamp: timestamp,
+			Line:      fmt.Sprintf("ses_event_timestamp='%s' %+v", ev.Delivery.Timestamp, ev.Mail),
+			Timestamp: ingestTimestamp,
 		}}); batchErr != nil {
 			return batchErr
 		}

@@ -51,6 +51,7 @@ func parseKinesisEvent(ctx context.Context, b *batch, ev *events.KinesisEvent) e
 
 func processKinesisEvent(ctx context.Context, ev *events.KinesisEvent, pClient Client) error {
 	batch, _ := newBatch(ctx, pClient)
+	batch.source = "kinesis"
 
 	err := parseKinesisEvent(ctx, batch, ev)
 	if err != nil {

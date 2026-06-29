@@ -348,6 +348,8 @@ func processS3Event(ctx context.Context, ev *events.S3Event, pc Client, log *log
 	if err != nil {
 		return err
 	}
+	// Mark all entries in this batch with S3 source for traceability
+	batch.source = "s3"
 	for _, record := range ev.Records {
 		labels, err := getLabels(record)
 		if err != nil {
